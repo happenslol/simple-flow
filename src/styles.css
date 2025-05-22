@@ -1,5 +1,5 @@
 @import "tailwindcss";
 
 #root {
-	@apply h-screen w-full overflow-x-hidden bg-neutral-800 text-white;
+	@apply min-h-screen overflow-x-hidden bg-neutral-800 text-white;
 }

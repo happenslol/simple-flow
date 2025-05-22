@@ -144,16 +144,16 @@ const buildBranch = (
 }
 
 const Node = (props: { id: string }) => (
-	<div className="flex h-14 w-32 items-center justify-center rounded-2xl bg-neutral-600 text-sm font-bold uppercase">
+	<div className="flex flex-none h-14 w-32 items-center justify-center rounded-2xl bg-neutral-600 text-sm font-bold uppercase">
 		{props.id}
 	</div>
 )
 
 const Flow = (props: { branch: Branch }) => (
-	<div className="flex items-center justify-start gap-6 [&>*]:shrink-0">
+	<div className="flex items-center justify-start gap-6 border border-neutral-700 flex-none">
 		{props.branch.map((s, idx) =>
 			Array.isArray(s) ? (
-				<div className="flex flex-col gap-4" key={idx}>
+				<div className="flex flex-col gap-4 flex-none" key={idx}>
 					{s.map((s2, idx2) => (
 						<Flow key={idx2} branch={s2} />
 					))}
@@ -166,8 +166,13 @@ const Flow = (props: { branch: Branch }) => (
 )
 
 export const App = () => (
-	<div className="flex min-h-screen min-w-full flex-col gap-20 overflow-x-auto p-8">
-		<Flow branch={transform(nodes)} />
-		<Flow branch={transform(nodes2)} />
+	<div className="flex flex-col gap-10 m-6">
+		<div className="border-2 border-neutral-400 p-8 overflow-x-auto">
+			<Flow branch={transform(nodes)} />
+		</div>
+
+		<div className="border-2 border-neutral-400 p-8 overflow-x-auto">
+			<Flow branch={transform(nodes2)} />
+		</div>
 	</div>
 )
