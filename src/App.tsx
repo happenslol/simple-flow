@@ -1,3 +1,4 @@
+import { useMemo, useRef } from "react"
 import { type Node, nodes, nodes2 } from "./data"
 
 type FlowData = {
@@ -143,36 +144,183 @@ const buildBranch = (
 	return [branch, outgoing]
 }
 
-const Node = (props: { id: string }) => (
-	<div className="flex flex-none h-14 w-32 items-center justify-center rounded-2xl bg-neutral-600 text-sm font-bold uppercase">
+const Node = (props: {
+	id: string
+	onRef: (node: HTMLDivElement | null, id: string) => void
+}) => (
+	<div
+		ref={r => props.onRef(r, props.id)}
+		className="relative flex h-14 w-32 flex-none items-center justify-center rounded-2xl bg-neutral-600 text-sm font-bold uppercase"
+	>
 		{props.id}
 	</div>
 )
 
-const Flow = (props: { branch: Branch }) => (
-	<div className="flex items-center justify-start gap-6 border border-neutral-700 flex-none">
+const Flow = (props: {
+	branch: Branch
+	onRef: (node: HTMLDivElement | null, id: string) => void
+}) => (
+	<div className="flex flex-none items-center justify-start gap-20">
 		{props.branch.map((s, idx) =>
 			Array.isArray(s) ? (
-				<div className="flex flex-col gap-4 flex-none" key={idx}>
+				<div className="flex flex-none flex-col gap-4" key={idx}>
 					{s.map((s2, idx2) => (
-						<Flow key={idx2} branch={s2} />
+						<Flow key={idx2} branch={s2} onRef={props.onRef} />
 					))}
 				</div>
 			) : (
-				<Node key={idx} id={s} />
+				<Node key={idx} onRef={props.onRef} id={s} />
 			),
 		)}
 	</div>
 )
 
-export const App = () => (
-	<div className="flex flex-col gap-10 m-6">
-		<div className="border-2 border-neutral-400 p-8 overflow-x-auto">
-			<Flow branch={transform(nodes)} />
-		</div>
+const FlowContainer = (props: { nodes: typeof nodes }) => {
+	const branch = useMemo(() => transform(props.nodes), [props.nodes])
 
-		<div className="border-2 border-neutral-400 p-8 overflow-x-auto">
-			<Flow branch={transform(nodes2)} />
+	const nodeRefs = useRef<Map<string, HTMLDivElement> | null>(null)
+	const edgeRefs = useRef<Array<SVGElement>>([])
+
+	const onRef = (node: HTMLDivElement | null, id: string) => {
+		if (nodeRefs.current == null) nodeRefs.current = new Map()
+
+		if (node == null) {
+			nodeRefs.current.delete(id)
+			return
+		}
+
+		nodeRefs.current.set(id, node)
+		if (nodeRefs.current.size === props.nodes.length) {
+			edgeRefs.current.forEach(el => el.remove())
+			edgeRefs.current = []
+
+			for (const node of props.nodes) {
+				const nodeRef = nodeRefs.current.get(node.id)
+				if (nodeRef == null) continue
+
+				const nodeBounds = nodeRef.getBoundingClientRect()
+
+				const nextNodes = node.nextIds
+					.map(id => nodeRefs.current?.get(id))
+					.filter(n => n != null)
+					.map(n => ({ node: n, bounds: n.getBoundingClientRect() }))
+					.sort((a, b) => a.bounds.y - b.bounds.y)
+
+				nextNodes.forEach((target, index) => {
+					const edge = createEdgeEl(
+						nodeBounds,
+						target.bounds,
+						index,
+						nextNodes.length,
+					)
+
+					nodeRef.appendChild(edge)
+					edgeRefs.current.push(edge)
+				})
+			}
+		}
+	}
+
+	return (
+		<div className="relative h-[30rem] w-full overflow-auto border border-neutral-400">
+			<div className="absolute top-10 left-10 pr-20 pb-20">
+				<Flow branch={branch} onRef={onRef} />
+			</div>
 		</div>
+	)
+}
+
+const lineWidth = 3
+const padding = 10
+const joinOffset = 14
+const cornerRadius = 4
+const outDegreeOffset = 8
+
+const createEdgeEl = (
+	source: DOMRect,
+	target: DOMRect,
+	index: number,
+	outDegree: number,
+) => {
+	const w = Math.abs(target.x - source.x - target.width)
+
+	const sourceY = (source.height - lineWidth) / 2
+	const targetY = (target.height - lineWidth) / 2
+
+	const sourceYAbs = source.y + sourceY
+	const targetYAbs = target.y + targetY
+
+	const diff = targetYAbs - sourceYAbs
+	const h = Math.abs(diff) + lineWidth
+
+	const edge = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+
+	edge.setAttribute("viewBox", `0 0 ${w} ${h}`)
+	edge.style.width = `${w}px`
+	edge.style.height = `${h}px`
+	edge.style.position = "absolute"
+	edge.style.left = `${source.width}px`
+	edge.style.zIndex = "1"
+
+	const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+	path.classList.add("text-neutral-400")
+	path.setAttribute("stroke", "currentcolor")
+	path.setAttribute("stroke-width", `${lineWidth}`)
+	path.setAttribute("stroke-linecap", "round")
+	path.setAttribute("fill", "none")
+
+	const outOffset = (index - (outDegree - 1) / 2) * outDegreeOffset
+	const outOffsetX = outOffset * 1.5
+
+	if (diff === 0) {
+		edge.style.top = `${sourceY}px`
+		path.setAttributeNS(
+			null,
+			"d",
+			`
+				M ${padding} ${lineWidth / 2}
+				l ${w - padding * 2} 0
+			`,
+		)
+	} else if (diff > 0) {
+		// Going down
+		edge.style.top = `${sourceY}px`
+		path.setAttributeNS(
+			null,
+			"d",
+			`
+				M ${padding} ${lineWidth / 2 + outOffset}
+				l ${w - joinOffset - outOffsetX - padding * 2 - cornerRadius} 0
+				a ${cornerRadius} ${cornerRadius} 0 0 1 ${cornerRadius} ${cornerRadius}
+				l 0 ${h - lineWidth - outOffset - cornerRadius * 2}
+				a ${cornerRadius} ${cornerRadius} 0 0 0 ${cornerRadius} ${cornerRadius}
+				l ${joinOffset - cornerRadius + outOffsetX} 0
+			`,
+		)
+	} else {
+		// Going up
+		edge.style.top = `${(h - sourceY - lineWidth) * -1}px`
+		path.setAttributeNS(
+			null,
+			"d",
+			`
+				M ${padding} ${h - lineWidth / 2 + outOffset}
+				l ${w - joinOffset + outOffsetX - padding * 2 - cornerRadius} 0
+				a ${cornerRadius} ${cornerRadius} 0 0 0 ${cornerRadius} ${-cornerRadius}
+				l 0 ${-h + lineWidth - outOffset + cornerRadius * 2}
+				a ${cornerRadius} ${cornerRadius} 0 0 1 ${cornerRadius} ${-cornerRadius}
+				l ${joinOffset - cornerRadius - outOffsetX} 0
+			`,
+		)
+	}
+
+	edge.appendChild(path)
+	return edge
+}
+
+export const App = () => (
+	<div className="m-6 flex flex-col gap-10">
+		<FlowContainer nodes={nodes} />
+		<FlowContainer nodes={nodes2} />
 	</div>
 )

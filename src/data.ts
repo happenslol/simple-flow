@@ -65,5 +65,9 @@ export const nodes2: Array<Node> = [
 	{ id: "4b", nextIds: ["4d"] },
 	{ id: "4c", nextIds: ["5"] },
 	{ id: "4d", nextIds: ["5"] },
-	{ id: "5", nextIds: [] },
+	{ id: "5", nextIds: ["5a", "5b", "5c", "5d"] },
+	{ id: "5a", nextIds: [] },
+	{ id: "5b", nextIds: [] },
+	{ id: "5c", nextIds: [] },
+	{ id: "5d", nextIds: [] },
 ]
